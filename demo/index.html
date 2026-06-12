@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>뮤저블 — 가변형 핀 도슨트 데모</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#181b22; --panel2:#1f232d; --line:#2a2f3a;
+    --ink:#e8e6e0; --sub:#9aa0ab; --accent:#d4a373; --accent2:#7ec8a9;
+    --blue:#6ea8d8;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:var(--bg); color:var(--ink); font-family:'Apple SD Gothic Neo','Pretendard',sans-serif; min-height:100vh;}
+  header{padding:28px 36px 18px; border-bottom:1px solid var(--line); display:flex; align-items:baseline; gap:16px; flex-wrap:wrap;}
+  header h1{font-size:22px; letter-spacing:-0.5px;}
+  header h1 b{color:var(--accent);}
+  header p{color:var(--sub); font-size:13px;}
+  main{display:grid; grid-template-columns:300px 1fr 340px; gap:18px; padding:20px 36px 40px; max-width:1500px; margin:0 auto;}
+  .panel{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px;}
+  .panel h2{font-size:13px; color:var(--sub); text-transform:uppercase; letter-spacing:1px; margin-bottom:14px;}
+
+  /* artwork cards */
+  .art-card{display:flex; gap:12px; align-items:center; padding:10px; border:1px solid var(--line); border-radius:10px; cursor:pointer; margin-bottom:10px; background:var(--panel2); transition:border .15s;}
+  .art-card:hover{border-color:var(--accent);}
+  .art-card.active{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent);}
+  .art-card canvas{border-radius:8px; background:#0a0c10; flex-shrink:0;}
+  .art-card .t{font-size:14px; font-weight:600;}
+  .art-card .s{font-size:11.5px; color:var(--sub); margin-top:3px; line-height:1.4;}
+
+  /* pipeline */
+  .pipeline{display:flex; align-items:center; gap:8px; margin-bottom:16px; flex-wrap:wrap;}
+  .step{flex:1; min-width:110px; background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:10px 12px; font-size:11.5px; color:var(--sub); text-align:center; transition:all .3s;}
+  .step b{display:block; color:var(--ink); font-size:12.5px; margin-bottom:3px;}
+  .step.on{border-color:var(--accent2); color:var(--ink); background:#1d2a25;}
+  .step.on b{color:var(--accent2);}
+  .arrow{color:var(--sub); font-size:14px;}
+
+  /* pin matrix */
+  .device{background:#14161c; border:1px solid var(--line); border-radius:18px; padding:18px; position:relative;}
+  #pins{display:block; width:100%; border-radius:10px; background:#0a0c10;}
+  .device-controls{display:flex; gap:10px; margin-top:14px; align-items:center; flex-wrap:wrap;}
+  button{background:var(--panel2); color:var(--ink); border:1px solid var(--line); border-radius:8px; padding:8px 14px; font-size:13px; cursor:pointer; font-family:inherit;}
+  button:hover{border-color:var(--accent);}
+  button.primary{background:var(--accent); color:#1a1408; border-color:var(--accent); font-weight:700;}
+  button.mode-on{background:#274237; border-color:var(--accent2); color:var(--accent2);}
+  input[type=range]{accent-color:var(--accent); width:120px;}
+  .ctl-label{font-size:11.5px; color:var(--sub);}
+  .badge{position:absolute; top:14px; right:18px; font-size:11px; padding:4px 10px; border-radius:20px; background:#272d3a; color:var(--blue); border:1px solid #34405a;}
+  .badge.touch{background:#2b2418; color:var(--accent); border-color:#54431f;}
+  .badge.braille{background:#1d2a25; color:var(--accent2); border-color:#2c4a3d;}
+
+  /* docent */
+  .docent-box{background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:14px; min-height:180px; font-size:13.5px; line-height:1.75; color:var(--ink); white-space:pre-wrap;}
+  .docent-box .cursor{display:inline-block; width:8px; height:15px; background:var(--accent); vertical-align:-2px; animation:blink .8s infinite;}
+  @keyframes blink{50%{opacity:0}}
+  .qa{margin-top:12px;}
+  .qa .q-btn{display:block; width:100%; text-align:left; margin-bottom:8px; font-size:12.5px; padding:9px 12px;}
+  .qa .q-btn:before{content:"💬 "; }
+  .speaking{font-size:11.5px; color:var(--accent2); margin-top:8px; display:none;}
+  .speaking.on{display:block;}
+  .ai-tag{display:inline-block; font-size:10px; padding:2px 7px; border-radius:5px; background:#272d3a; color:var(--blue); margin-left:6px; vertical-align:1px;}
+
+  footer{padding:14px 36px 30px; color:var(--sub); font-size:11.5px; text-align:center;}
+  @media(max-width:1100px){ main{grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+<header>
+  <h1><b>뮤저블</b> · 가변형 핀 도슨트 — 인터랙티브 데모</h1>
+  <p>시각장애인에게도, 박물관은 살아있다! &nbsp;|&nbsp; 작품 사진 → AI 3D 변환 → 핀 매트릭스 촉각 감상 → 음성·점자 도슨트</p>
+</header>
+
+<main>
+  <!-- LEFT: artwork selection -->
+  <section class="panel">
+    <h2>① 작품 선택 <span class="ai-tag">관람객의 선택권</span></h2>
+    <div id="artList"></div>
+    <p style="font-size:11.5px;color:var(--sub);line-height:1.6;margin-top:8px;">
+      실제 서비스에서는 박물관이 보유한 <b style="color:var(--ink)">공식 작품 사진</b>을
+      등록 시점에 한 번 VARCO image-to-3D로 변환해 캐싱합니다.
+      관람객은 전시장 내 <b style="color:var(--ink)">어떤 작품이든</b> 골라 감상할 수 있습니다.
+    </p>
+  </section>
+
+  <!-- CENTER: pipeline + device -->
+  <section class="panel">
+    <h2>② AI 처리 파이프라인 → 핀 도슨트 디바이스</h2>
+    <div class="pipeline">
+      <div class="step" id="st0"><b>작품 사진</b>박물관 공식 이미지</div>
+      <span class="arrow">→</span>
+      <div class="step" id="st1"><b>VARCO image-to-3D</b>3D 모델 생성 (사전 1회)</div>
+      <span class="arrow">→</span>
+      <div class="step" id="st2"><b>Height Map</b>촉각 데이터 변환</div>
+      <span class="arrow">→</span>
+      <div class="step" id="st3"><b>핀 매트릭스</b>수백 개 핀 구동</div>
+    </div>
+
+    <div class="device">
+      <span class="badge" id="modeBadge">대기 중</span>
+      <canvas id="pins" width="840" height="560"></canvas>
+      <div class="device-controls">
+        <button class="primary" id="btnStart">▶ 작품 올리기</button>
+        <span class="ctl-label">회전 다이얼</span>
+        <input type="range" id="rot" min="0" max="360" value="0">
+        <span class="ctl-label">확대/축소</span>
+        <input type="range" id="zoom" min="60" max="220" value="100">
+        <button id="btnAuto">⟳ 자동 회전</button>
+        <button id="btnBraille">⠿ 점자 모드</button>
+        <button id="btnReset">초기화</button>
+      </div>
+    </div>
+    <p style="font-size:11.5px;color:var(--sub);margin-top:10px;line-height:1.6;">
+      위 그리드의 점 하나하나가 실제 디바이스의 <b style="color:var(--ink)">물리적 핀</b>입니다.
+      밝고 큰 점일수록 높이 솟아오른 핀 — 손끝으로 작품의 윤곽과 입체감을 느낄 수 있습니다.
+      회전·확대는 캐싱된 3D 모델 기반의 결정론적 계산이라 <b style="color:var(--ink)">즉시 반응</b>합니다.
+    </p>
+  </section>
+
+  <!-- RIGHT: docent -->
+  <section class="panel">
+    <h2>③ AI 도슨트 <span class="ai-tag">HyperCLOVA X + RAG</span><span class="ai-tag">VARCO text2sound</span></h2>
+    <div class="docent-box" id="docent">작품을 선택하고 「▶ 작품 올리기」를 누르면, 핀이 솟아오르며 도슨트가 시작됩니다.</div>
+    <div class="speaking" id="speaking">🔊 VARCO text2sound — 한국어 음성 낭독 중… (브라우저 TTS로 시뮬레이션)</div>
+    <div class="qa" id="qaBox" style="display:none;">
+      <h2 style="margin:14px 0 10px;">실시간 질의응답 (RAG 기반)</h2>
+      <div id="qButtons"></div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  데모 시뮬레이션 — 실제 시스템에서는 VARCO image-to-3D / text2sound API와 HyperCLOVA X + Chroma RAG가 호출됩니다. · 팀 뮤저블 (2026 인공지능 루키 대회)
+</footer>
+
+<script>
+/* ================= 작품 데이터 (절차적으로 그린 샘플 작품) ================= */
+const ARTWORKS = [
+  {
+    id:'celadon', title:'청자 상감운학문 매병', sub:'고려 12세기 · 입체 유물 · 국보',
+    draw(ctx,w,h){ // 매병 silhouette + 학 무늬
+      ctx.fillStyle='#000'; ctx.fillRect(0,0,w,h);
+      const cx=w/2;
+      const g=ctx.createLinearGradient(cx-90,0,cx+90,0);
+      g.addColorStop(0,'#333'); g.addColorStop(.5,'#e9e9e9'); g.addColorStop(1,'#2a2a2a');
+      ctx.fillStyle=g;
+      ctx.beginPath();
+      ctx.moveTo(cx-26,h*0.10); ctx.lineTo(cx+26,h*0.10);
+      ctx.bezierCurveTo(cx+30,h*0.16,cx+95,h*0.22,cx+88,h*0.42);
+      ctx.bezierCurveTo(cx+82,h*0.66,cx+46,h*0.82,cx+42,h*0.92);
+      ctx.lineTo(cx-42,h*0.92);
+      ctx.bezierCurveTo(cx-46,h*0.82,cx-82,h*0.66,cx-88,h*0.42);
+      ctx.bezierCurveTo(cx-95,h*0.22,cx-30,h*0.16,cx-26,h*0.10);
+      ctx.closePath(); ctx.fill();
+      // 운학문
+      ctx.fillStyle='#555';
+      for(const [dx,dy] of [[-40,.32],[30,.40],[-15,.52],[40,.58],[-45,.62]]){
+        ctx.beginPath(); ctx.ellipse(cx+dx,h*dy,14,5,-.4,0,7); ctx.fill();
+      }
+    },
+    docent:'지금 손끝에 닿는 것은 고려 12세기의 청자 매병입니다. 어깨가 풍만하게 부풀어 오르다가, 허리로 내려가며 부드럽게 좁아지는 곡선을 느껴보세요. 이 곡선이 매병 특유의 우아함입니다. 몸체 곳곳에 작게 솟은 점들은 상감 기법으로 새겨진 구름과 학 무늬입니다. 학은 장수를, 구름은 신선의 세계를 상징합니다.',
+    qa:[
+      {q:'왜 어깨가 이렇게 넓어요?', a:'고려 매병은 풍만한 어깨에서 잘록한 허리로 떨어지는 S자 곡선이 핵심 조형미입니다. 술이나 꿀을 담는 실용기였지만, 안정감과 우아함을 동시에 주도록 설계된 비례입니다.'},
+      {q:'상감 기법이 뭐예요?', a:'표면을 파낸 자리에 흰 흙과 붉은 흙을 메워 넣고 유약을 입혀 굽는 고려의 독창적 장식 기법입니다. 지금 만지는 작은 돌기들이 그 무늬의 위치를 알려주고 있습니다.'}
+    ]
+  },
+  {
+    id:'buddha', title:'금동 반가사유상', sub:'삼국시대 7세기 · 입체 유물 · 국보',
+    draw(ctx,w,h){
+      ctx.fillStyle='#000'; ctx.fillRect(0,0,w,h);
+      const cx=w/2;
+      ctx.fillStyle='#ddd';
+      // head
+      ctx.beginPath(); ctx.arc(cx,h*0.18,h*0.085,0,7); ctx.fill();
+      // crown
+      ctx.fillStyle='#fff';
+      ctx.beginPath(); ctx.moveTo(cx-34,h*0.13); ctx.lineTo(cx,h*0.05); ctx.lineTo(cx+34,h*0.13); ctx.closePath(); ctx.fill();
+      // torso
+      ctx.fillStyle='#c8c8c8';
+      ctx.beginPath();
+      ctx.moveTo(cx-30,h*0.26); ctx.bezierCurveTo(cx-55,h*0.40,cx-50,h*0.55,cx-60,h*0.62);
+      ctx.lineTo(cx+55,h*0.62); ctx.bezierCurveTo(cx+58,h*0.45,cx+40,h*0.30,cx+30,h*0.26);
+      ctx.closePath(); ctx.fill();
+      // right arm to cheek
+      ctx.strokeStyle='#eee'; ctx.lineWidth=16; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(cx+38,h*0.40); ctx.quadraticCurveTo(cx+52,h*0.28,cx+18,h*0.21); ctx.stroke();
+      // crossed leg
+      ctx.fillStyle='#bbb';
+      ctx.beginPath(); ctx.ellipse(cx-5,h*0.66,75,22,0,0,7); ctx.fill();
+      // pedestal
+      ctx.fillStyle='#888';
+      ctx.beginPath(); ctx.moveTo(cx-60,h*0.72); ctx.lineTo(cx+60,h*0.72); ctx.lineTo(cx+45,h*0.92); ctx.lineTo(cx-45,h*0.92); ctx.closePath(); ctx.fill();
+    },
+    docent:'손끝으로 가장 높이 솟은 부분이 보살의 머리, 그 위의 뾰족한 삼면이 보관입니다. 오른쪽으로 길게 이어지는 가는 능선을 따라가 보세요. 뺨에 살짝 닿은 손가락 — 깊은 생각에 잠긴 반가사유의 자세입니다. 아래쪽 넓고 둥근 융기는 왼 무릎 위에 얹은 오른 다리입니다. 1,400년 전의 고요한 미소를 형태로 만나보세요.',
+    qa:[
+      {q:'왜 손을 뺨에 대고 있어요?', a:'"반가사유"란 한쪽 다리를 다른 쪽 무릎에 얹고 손끝을 뺨에 댄 채 깊이 사유하는 자세입니다. 인간의 생로병사를 고뇌하는 싯다르타 태자의 모습을 표현한 것으로 해석됩니다.'},
+      {q:'이거 실제 크기는 얼마나 해요?', a:'실물은 높이 약 93.5cm의 금동상입니다. 지금은 손바닥 안에 전체 형상이 들어오도록 AI가 축소 변환했고, 다이얼을 돌리면 얼굴이나 옷주름만 확대해 세부를 만질 수 있습니다.'}
+    ]
+  },
+  {
+    id:'painting', title:'김홍도 「씨름」', sub:'조선 18세기 · 평면 회화 → 입체 윤곽 변환',
+    draw(ctx,w,h){
+      ctx.fillStyle='#000'; ctx.fillRect(0,0,w,h);
+      const cx=w/2, cy=h/2;
+      // 씨름꾼 두 명 (중앙, 높게)
+      ctx.fillStyle='#eee';
+      ctx.beginPath(); ctx.arc(cx-22,cy-55,16,0,7); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx+20,cy-40,16,0,7); ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(cx-40,cy-40); ctx.bezierCurveTo(cx-55,cy+15,cx-20,cy+40,cx,cy+35);
+      ctx.bezierCurveTo(cx+35,cy+42,cx+55,cy,cx+38,cy-28);
+      ctx.bezierCurveTo(cx+15,cy-50,cx-20,cy-55,cx-40,cy-40);
+      ctx.closePath(); ctx.fill();
+      // 구경꾼 (둘레, 낮게)
+      ctx.fillStyle='#777';
+      const ring=[[-.32,-.30],[-.38,-.05],[-.34,.22],[-.18,.34],[.10,.36],[.30,.28],[.38,.05],[.34,-.22],[.15,-.36],[-.10,-.38]];
+      for(const [rx,ry] of ring){
+        ctx.beginPath(); ctx.arc(cx+rx*w*0.85,cy+ry*h*0.85,13,0,7); ctx.fill();
+      }
+    },
+    docent:'평면 그림도 윤곽으로 만질 수 있습니다. 한가운데 가장 높게 솟은 큰 덩어리가 맞붙은 두 씨름꾼 — 한 사람이 상대를 들배지기로 들어 올리는 순간입니다. 그 둘레를 따라 낮게 돋은 점들을 짚어보세요. 빙 둘러앉은 구경꾼들입니다. 중앙은 긴장, 둘레는 웃음. 김홍도가 그린 조선 장터의 활기가 손끝에 펼쳐집니다.',
+    qa:[
+      {q:'그림인데 어떻게 만질 수 있어요?', a:'AI가 회화의 인물·배경·깊이를 분석해 주요 대상은 높게, 배경은 낮게 변환한 입체 윤곽(height map)을 만듭니다. 형태를 전혀 모른 채 설명만 듣던 한계를 넘는 핵심 기능입니다.'},
+      {q:'씨름에서 누가 이길 것 같아요?', a:'들어 올려진 쪽의 다리가 공중에 떠 있어 곧 넘어갈 참입니다. 재미있게도 오른쪽 아래 구경꾼들이 입을 벌리고 몸을 뒤로 젖히고 있죠 — 김홍도는 승부의 결과를 구경꾼의 표정으로 암시했습니다.'}
+    ]
+  }
+];
+
+/* ================= 상태 ================= */
+const PIN_COLS=140, PIN_ROWS=94;
+let current=null, heightMap=null, animT=0, animating=false, brailleMode=false;
+let rotation=0, zoom=1;
+const cv=document.getElementById('pins'), cx2=cv.getContext('2d');
+
+/* ---- 썸네일 + 작품 목록 ---- */
+const list=document.getElementById('artList');
+ARTWORKS.forEach((a,i)=>{
+  const card=document.createElement('div'); card.className='art-card'; card.id='card-'+a.id;
+  const th=document.createElement('canvas'); th.width=64; th.height=64;
+  a.draw(th.getContext('2d'),64,64);
+  const txt=document.createElement('div');
+  txt.innerHTML=`<div class="t">${a.title}</div><div class="s">${a.sub}</div>`;
+  card.append(th,txt);
+  card.onclick=()=>selectArt(i);
+  list.appendChild(card);
+});
+
+/* ---- height map 생성: 작품을 offscreen에 그리고 밝기 샘플링 ---- */
+function buildHeightMap(art){
+  const off=document.createElement('canvas'); off.width=PIN_COLS*4; off.height=PIN_ROWS*4;
+  art.draw(off.getContext('2d'),off.width,off.height);
+  const d=off.getContext('2d').getImageData(0,0,off.width,off.height).data;
+  const hm=new Float32Array(PIN_COLS*PIN_ROWS);
+  for(let y=0;y<PIN_ROWS;y++)for(let x=0;x<PIN_COLS;x++){
+    let s=0;
+    for(let dy=0;dy<4;dy++)for(let dx=0;dx<4;dx++){
+      const idx=(((y*4+dy)*off.width)+(x*4+dx))*4;
+      s+=d[idx];
+    }
+    hm[y*PIN_COLS+x]=s/(16*255);
+  }
+  return hm;
+}
+
+/* ---- 회전/줌 적용 샘플링 ---- */
+function sampleHM(x,y){
+  const cxp=PIN_COLS/2, cyp=PIN_ROWS/2;
+  const rad=rotation*Math.PI/180, cos=Math.cos(rad), sin=Math.sin(rad);
+  let dx=(x-cxp)/zoom, dy=(y-cyp)/zoom;
+  const sx=Math.round(cxp+dx*cos-dy*sin), sy=Math.round(cyp+dx*sin+dy*cos);
+  if(sx<0||sx>=PIN_COLS||sy<0||sy>=PIN_ROWS) return 0;
+  return heightMap[sy*PIN_COLS+sx];
+}
+
+/* ---- 점자 변환 (도슨트 첫 문장을 점자 패턴처럼 표시 — 시각화용) ---- */
+function brailleHM(x,y){
+  // 의사-점자: 글자 해시 기반 2x3 도트 블록을 그리드에 배치
+  const bw=4,bh=5; // block size incl. gap
+  const bx=Math.floor(x/bw), by=Math.floor(y/bh);
+  const ix=x%bw, iy=y%bh;
+  if(ix>1||iy>2) return 0;
+  if(!current) return 0;
+  const txt=current.docent;
+  const ch=txt.charCodeAt((by*Math.floor(PIN_COLS/bw)+bx)%txt.length);
+  const bit=(ch>>( iy*2+ix ))&1;
+  return bit?0.95:0;
+}
+
+/* ---- 핀 물리 엔진: 각 핀이 스프링처럼 목표 높이를 따라감 ---- */
+const pinH=new Float32Array(PIN_COLS*PIN_ROWS);   // 현재 높이
+const pinV=new Float32Array(PIN_COLS*PIN_ROWS);   // 속도
+let autoRotate=false, riseWave=-1, time=0;
+
+function targetHeight(x,y){
+  if(!heightMap) {
+    // 대기 상태: 은은한 물결
+    return 0.04+0.035*Math.sin(x*0.25+time*1.4)*Math.sin(y*0.3+time*1.1);
+  }
+  let h = brailleMode? brailleHM(x,y) : sampleHM(x,y);
+  // 작품 올라올 때: 왼쪽→오른쪽으로 쓸려 올라오는 웨이브
+  if(riseWave>=0){
+    const front=riseWave*(PIN_COLS+18)-9;
+    if(x>front) h=0;
+    else if(x>front-9) h*= (front-x)/9;
+  }
+  // 감상 모드: 표면이 살짝 숨쉬는 듯한 미세 진동(영상 느낌)
+  if(!brailleMode && h>0.05) h += 0.012*Math.sin(time*2.2+x*0.35+y*0.27);
+  return h;
+}
+
+function render(){
+  const W=cv.width,H=cv.height;
+  cx2.fillStyle='#08090c'; cx2.fillRect(0,0,W,H);
+  const gx=W/PIN_COLS, gy=H/PIN_ROWS;
+
+  // 1패스: 스프링 물리 업데이트 (목표를 향해 가속 + 감쇠 → 출렁이며 도착)
+  for(let y=0;y<PIN_ROWS;y++)for(let x=0;x<PIN_COLS;x++){
+    const i=y*PIN_COLS+x;
+    const t=targetHeight(x,y);
+    pinV[i]+= (t-pinH[i])*0.18;
+    pinV[i]*=0.78;
+    pinH[i]+=pinV[i];
+  }
+
+  // 2패스: 양각 부조 렌더링 — 좌상단 광원 기준 경사면 음영
+  for(let y=0;y<PIN_ROWS;y++)for(let x=0;x<PIN_COLS;x++){
+    const i=y*PIN_COLS+x;
+    const h=Math.max(0,pinH[i]);
+    // 이웃 핀과의 높이차로 표면 기울기(법선) 추정
+    const hl=pinH[y*PIN_COLS+Math.max(0,x-1)], hr=pinH[y*PIN_COLS+Math.min(PIN_COLS-1,x+1)];
+    const hu=pinH[Math.max(0,y-1)*PIN_COLS+x], hd=pinH[Math.min(PIN_ROWS-1,y+1)*PIN_COLS+x];
+    const shade=( (hl-hr)+(hu-hd) )*2.2;          // 좌상단에서 빛
+    let lum=Math.min(255,Math.max(8, 28+h*150 + shade*255));
+    const r=Math.max(0.6, (0.28+h*0.55)*gx*0.62);  // 바닥 핀도 살짝 보이게
+    if(brailleMode){
+      cx2.fillStyle=`rgb(${Math.round(lum*0.55)},${Math.round(lum)},${Math.round(lum*0.78)})`;
+    }else{
+      // 석조 부조 느낌의 웜그레이 톤
+      cx2.fillStyle=`rgb(${Math.round(lum)},${Math.round(lum*0.94)},${Math.round(lum*0.84)})`;
+    }
+    cx2.beginPath();
+    cx2.arc(x*gx+gx/2, y*gy+gy/2, r, 0, 7);
+    cx2.fill();
+    // 높이 솟은 핀에는 하이라이트 점
+    if(h>0.45 && !brailleMode){
+      cx2.fillStyle=`rgba(255,250,240,${Math.min(0.5,(h-0.45))})`;
+      cx2.beginPath();
+      cx2.arc(x*gx+gx/2-r*0.3, y*gy+gy/2-r*0.3, r*0.35, 0, 7);
+      cx2.fill();
+    }
+  }
+}
+
+/* ---- 상시 애니메이션 루프 (영상처럼 항상 움직임) ---- */
+function loop(){
+  time+=1/60;
+  if(riseWave>=0){ riseWave+=0.012; if(riseWave>1.3) riseWave=-1; }
+  if(autoRotate && heightMap && !brailleMode){
+    rotation=(rotation+0.5)%360;
+    document.getElementById('rot').value=rotation;
+  }
+  render();
+  requestAnimationFrame(loop);
+}
+loop();
+
+function animateUp(){ riseWave=0; }
+
+/* ---- 파이프라인 단계 연출 ---- */
+function runPipeline(done){
+  const ids=['st0','st1','st2','st3'];
+  ids.forEach(i=>document.getElementById(i).classList.remove('on'));
+  let i=0;
+  const next=()=>{
+    if(i>0) {}
+    if(i<ids.length){
+      document.getElementById(ids[i]).classList.add('on');
+      i++; setTimeout(next, i===2?900:550); // 3D 변환 단계는 살짝 길게
+    } else done();
+  };
+  next();
+}
+
+/* ---- 도슨트 텍스트 타이핑 + TTS ---- */
+const docentEl=document.getElementById('docent');
+const speakingEl=document.getElementById('speaking');
+let typeTimer=null;
+function speak(text){
+  try{
+    speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(text);
+    u.lang='ko-KR'; u.rate=1.02;
+    u.onstart=()=>speakingEl.classList.add('on');
+    u.onend=()=>speakingEl.classList.remove('on');
+    speechSynthesis.speak(u);
+  }catch(e){}
+}
+function typeDocent(text, cb){
+  clearInterval(typeTimer);
+  docentEl.innerHTML='';
+  let i=0;
+  speak(text);
+  typeTimer=setInterval(()=>{
+    i+=2;
+    docentEl.innerHTML=text.slice(0,i)+'<span class="cursor"></span>';
+    if(i>=text.length){ clearInterval(typeTimer); docentEl.textContent=text; cb&&cb(); }
+  },28);
+}
+
+/* ---- Q&A ---- */
+const qaBox=document.getElementById('qaBox'), qButtons=document.getElementById('qButtons');
+function showQA(art){
+  qButtons.innerHTML='';
+  art.qa.forEach(item=>{
+    const b=document.createElement('button'); b.className='q-btn'; b.textContent=item.q;
+    b.onclick=()=>typeDocent('Q. '+item.q+'\n\n'+item.a);
+    qButtons.appendChild(b);
+  });
+  qaBox.style.display='block';
+}
+
+/* ---- 모드 배지 ---- */
+const badge=document.getElementById('modeBadge');
+function setBadge(mode){
+  badge.className='badge'+(mode==='touch'?' touch':mode==='braille'?' braille':'');
+  badge.textContent = mode==='touch'?'감상 모드 — 핀 구동 중':mode==='braille'?'점자 모드 — 해설 출력':'대기 중';
+}
+
+/* ---- 이벤트 ---- */
+function selectArt(i){
+  current=ARTWORKS[i];
+  document.querySelectorAll('.art-card').forEach(c=>c.classList.remove('active'));
+  document.getElementById('card-'+current.id).classList.add('active');
+  docentEl.textContent=`「${current.title}」 선택됨 — 「▶ 작품 올리기」를 눌러 핀 도슨트를 시작하세요.`;
+  qaBox.style.display='none';
+}
+document.getElementById('btnStart').onclick=()=>{
+  if(!current){ selectArt(0); }
+  brailleMode=false;
+  heightMap=buildHeightMap(current);
+  rotation=0; zoom=1;
+  document.getElementById('rot').value=0; document.getElementById('zoom').value=100;
+  runPipeline(()=>{
+    setBadge('touch');
+    animateUp();
+    typeDocent(current.docent, ()=>showQA(current));
+  });
+};
+document.getElementById('rot').oninput=e=>{ rotation=+e.target.value; };
+document.getElementById('zoom').oninput=e=>{ zoom=e.target.value/100; };
+document.getElementById('btnAuto').onclick=function(){
+  autoRotate=!autoRotate;
+  this.classList.toggle('mode-on',autoRotate);
+};
+document.getElementById('btnBraille').onclick=function(){
+  if(!heightMap) return;
+  brailleMode=!brailleMode;
+  this.classList.toggle('mode-on',brailleMode);
+  setBadge(brailleMode?'braille':'touch');
+  if(brailleMode){
+    typeDocent('핀 배열이 점자로 전환되었습니다. 감상한 작품의 상세 해설을 손끝으로 직접 읽을 수 있습니다. (화면의 패턴은 점자 출력 시뮬레이션입니다)');
+  }
+};
+document.getElementById('btnReset').onclick=()=>{
+  heightMap=null; current=null; brailleMode=false; autoRotate=false; riseWave=-1;
+  document.getElementById('btnAuto').classList.remove('mode-on');
+  speechSynthesis.cancel(); speakingEl.classList.remove('on');
+  document.getElementById('btnBraille').classList.remove('mode-on');
+  document.querySelectorAll('.art-card').forEach(c=>c.classList.remove('active'));
+  ['st0','st1','st2','st3'].forEach(i=>document.getElementById(i).classList.remove('on'));
+  setBadge(); render();
+  docentEl.textContent='작품을 선택하고 「▶ 작품 올리기」를 누르면, 핀이 솟아오르며 도슨트가 시작됩니다.';
+  qaBox.style.display='none';
+};
+</script>
+</body>
+</html>
