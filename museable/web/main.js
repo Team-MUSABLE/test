@@ -23,7 +23,7 @@ camera.position.set(0, 16, 20);
 
 const controls = new THREE.OrbitControls(camera, canvas);
 controls.enableDamping = true; controls.dampingFactor = 0.08;
-controls.target.set(0, 1.2, 0);
+controls.target.set(0, -3.2, 0);   // 시선을 아래로 → 디바이스가 화면 위쪽에 위치(하단 도슨트 패널 안 가림)
 controls.minDistance = 10; controls.maxDistance = 40;
 
 scene.add(new THREE.AmbientLight(0xffffff, 0.35));
@@ -155,12 +155,27 @@ const listEl = document.getElementById('artList');
 function renderList() {
   listEl.innerHTML = '';
   artworks.forEach(a => {
-    const b = document.createElement('button'); b.className = 'art'; b.id = 'a-' + a.id;
+    const b = document.createElement('div'); b.className = 'art'; b.id = 'a-' + a.id;
     b.innerHTML = `<div class="t">${a.title}</div><div class="s">${a.era} · ${a.type === '2d' ? '회화(윤곽 relief)' : '입체 유물'}</div>`;
     b.onclick = () => selectArt(a);
+    const del = document.createElement('div'); del.className = 'del'; del.textContent = '✕'; del.title = '삭제';
+    del.onclick = (e) => { e.stopPropagation(); deleteArt(a); };
+    b.appendChild(del);
     listEl.appendChild(b);
   });
 }
+async function deleteArt(a) {
+  if (!confirm(`「${a.title}」 삭제할까요?`)) return;
+  if (useBackend) {
+    try { await fetch(`/api/artworks/${a.id}`, { method: 'DELETE' }); }
+    catch (e) { alert('삭제 실패: ' + e); return; }
+  } else {
+    artworks = artworks.filter(x => x.id !== a.id);
+  }
+  if (current && current.id === a.id) { current = null; document.getElementById('btnReset').onclick(); }
+  if (useBackend) await loadArtworks(); else renderList();
+}
+
 function selectArt(a) {
   current = a;
   document.querySelectorAll('.art').forEach(e => e.classList.remove('on'));
@@ -178,7 +193,53 @@ async function raise(roiScale = 1) {
   setTarget(data);
   document.getElementById('hudSub').textContent =
     `핀 ${COLS}×${ROWS} 상승 중 · 높이=H 양자화값 (FPGA 동일 값)`;
+  loadDocent();
 }
+
+/* ---- AI 도슨트 (EXAONE, 백엔드 경유) ---- */
+const dtext = document.getElementById('dtext');
+const dq = document.getElementById('dq');
+const dsend = document.getElementById('dsend');
+
+async function loadDocent() {
+  if (!useBackend) { dtext.textContent = '도슨트는 백엔드(/api) 실행 시 EXAONE로 생성됩니다.'; return; }
+  dtext.textContent = '도슨트 생성 중…  (분석 중)';
+  try {
+    const r = await fetch(`/api/artworks/${current.id}/docent`);
+    const j = await r.json();
+    dtext.textContent = j.text || '(빈 응답)';
+    showSources(j.sources, j.grounded);
+  } catch (e) { dtext.textContent = '도슨트 생성 실패: ' + e; }
+}
+
+function showSources(sources, grounded) {
+  const el = document.getElementById('dsrc');
+  if (grounded && sources && sources.length)
+    el.textContent = '📚 근거(RAG): ' + sources.join(' · ');
+  else
+    el.textContent = grounded === false ? '⚠ RAG 코퍼스 없음 — 일반 지식 기반(검증 안 됨)' : '';
+}
+
+async function askQuestion() {
+  const q = dq.value.trim();
+  if (!q || !current) return;
+  if (!useBackend) { dtext.textContent = '질문 응답은 백엔드(/api) 실행 시 가능합니다.'; return; }
+  dsend.disabled = true; const prev = dtext.textContent;
+  dtext.textContent = `Q. ${q}\n\n생성 중…`;
+  try {
+    const r = await fetch(`/api/artworks/${current.id}/ask`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: q }),
+    });
+    const j = await r.json();
+    dtext.textContent = `Q. ${q}\n\n${j.answer || '(빈 응답)'}`;
+    showSources(j.sources, j.grounded);
+    dq.value = '';
+  } catch (e) { dtext.textContent = prev + '\n\n질문 실패: ' + e; }
+  dsend.disabled = false;
+}
+dsend.onclick = askQuestion;
+dq.addEventListener('keydown', e => { if (e.key === 'Enter') askQuestion(); });
 
 document.getElementById('btnRaise').onclick = () => raise();
 document.getElementById('zoom').oninput = () => raise();   // ROI 변경 → 내렸다 재상승 (A4 규칙)
@@ -188,6 +249,31 @@ document.getElementById('btnReset').onclick = () => {
   scene.rotation.y = 0;
   document.getElementById('hudTitle').textContent = '작품을 고르고 「핀 올리기」';
   document.getElementById('hudSub').textContent = '';
+};
+
+/* ---- 작품 등록 (사진 업로드 → 핀) ---- */
+const upBtn = document.getElementById('upBtn'), upMsg = document.getElementById('upMsg');
+upBtn.onclick = async () => {
+  if (!useBackend) { upMsg.textContent = '업로드는 백엔드(/api) 실행 시 가능합니다.'; return; }
+  const f = document.getElementById('upFile').files[0];
+  const title = document.getElementById('upTitle').value.trim() || '무제';
+  if (!f) { upMsg.textContent = '사진을 선택하세요.'; return; }
+  const fd = new FormData();
+  fd.append('title', title);
+  fd.append('era', document.getElementById('upEra').value.trim());
+  fd.append('type', document.getElementById('upType').value);
+  fd.append('image', f);
+  upBtn.disabled = true; upMsg.textContent = '사진 분석 중… (relief → H 생성)';
+  try {
+    const r = await fetch('/api/artworks', { method: 'POST', body: fd });
+    if (!r.ok) throw new Error(await r.text());
+    const art = await r.json();
+    await loadArtworks();          // 목록 갱신
+    selectArt(artworks.find(a => a.id === art.id) || art);
+    upMsg.textContent = '등록 완료 → 「핀 올리기」를 누르세요.';
+    raise();                       // 바로 핀 상승
+  } catch (e) { upMsg.textContent = '실패: ' + e; }
+  upBtn.disabled = false;
 };
 
 /* ---- 리사이즈 ---- */

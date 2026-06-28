@@ -20,6 +20,10 @@
   .art.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);}
   .art .t{font-size:14px;font-weight:600;}
   .art .s{font-size:11px;color:var(--sub);margin-top:3px;}
+  #upBox input[type=text],#upBox select{width:100%;background:#0f1218;border:1px solid var(--line);
+        border-radius:8px;color:var(--ink);padding:8px 10px;font-size:12.5px;font-family:inherit;margin-bottom:7px;}
+  #upBox input[type=file]{width:100%;font-size:11px;color:var(--sub);margin-bottom:8px;}
+  #upMsg{font-size:11px;color:var(--accent2);margin-top:6px;min-height:14px;}
   .ctl{margin-top:6px;}
   .ctl label{display:block;font-size:11px;color:var(--sub);margin:12px 0 5px;}
   input[type=range]{width:100%;accent-color:var(--accent);}
@@ -34,6 +38,22 @@
   #hud b{color:var(--accent2);}
   #stat{position:absolute;right:18px;top:16px;font-size:11px;color:var(--sub);text-align:right;line-height:1.7;}
   #stat .k{color:var(--ink);}
+  #docent{position:absolute;left:18px;right:18px;bottom:16px;max-width:760px;margin:0 auto;
+          background:rgba(21,24,31,.92);border:1px solid var(--line);border-radius:14px;padding:14px 16px;backdrop-filter:blur(6px);}
+  #docent .dhead{font-size:11px;color:var(--sub);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;}
+  #docent .dtag{background:#272d3a;color:#6ea8d8;border-radius:5px;padding:1px 7px;font-size:10px;margin-left:6px;letter-spacing:0;}
+  #docent .dtext{font-size:13.5px;line-height:1.7;color:var(--ink);max-height:108px;overflow:auto;white-space:pre-wrap;}
+  .art{position:relative;padding-right:34px;}
+  .art .del{position:absolute;top:8px;right:8px;width:22px;height:22px;line-height:20px;text-align:center;
+        border-radius:6px;background:#2a2030;border:1px solid #4a2f3a;color:#d98a9a;font-size:13px;cursor:pointer;}
+  .art .del:hover{background:#3a2530;color:#ff9ba8;}
+  #docent .dsrc{font-size:10.5px;color:var(--accent2);margin-top:7px;min-height:13px;}
+  #docent .dask{display:flex;gap:8px;margin-top:10px;}
+  #docent .dask input{flex:1;background:#0f1218;border:1px solid var(--line);border-radius:8px;
+        color:var(--ink);padding:9px 12px;font-size:13px;font-family:inherit;}
+  #docent .dask button{background:var(--accent2);color:#0a140f;border:none;border-radius:8px;
+        padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;}
+  #docent .dask button:disabled{opacity:.5;cursor:default;}
 </style>
 </head>
 <body>
@@ -41,6 +61,16 @@
   <aside>
     <h1><b>museable</b> · 핀 도슨트</h1>
     <div class="tag">정면 height map → n×m 핀 실시간 상승 (A4)</div>
+
+    <div class="grp-title">작품 등록 (사진 → 핀)</div>
+    <div id="upBox">
+      <input type="text" id="upTitle" placeholder="작품명" />
+      <input type="text" id="upEra" placeholder="시대 (예: 고려 12세기)" />
+      <select id="upType"><option value="3d">입체 유물</option><option value="2d">평면 회화</option></select>
+      <input type="file" id="upFile" accept="image/*" />
+      <button class="ghost" id="upBtn">＋ 사진 올려 작품 만들기</button>
+      <div id="upMsg"></div>
+    </div>
 
     <div class="grp-title">작품 선택</div>
     <div id="artList"></div>
@@ -68,6 +98,16 @@
     <div id="stat">
       <span class="k" id="stPins">—</span> pins<br>
       소스: <span class="k" id="stSrc">—</span>
+    </div>
+
+    <div id="docent">
+      <div class="dhead">AI 도슨트 <span class="dtag">EXAONE</span></div>
+      <div id="dtext" class="dtext">작품을 올리면 도슨트가 생성됩니다.</div>
+      <div id="dsrc" class="dsrc"></div>
+      <div class="dask">
+        <input id="dq" type="text" placeholder="작품에 대해 질문해 보세요 (예: 왜 손을 뺨에 댔어?)" />
+        <button id="dsend">질문</button>
+      </div>
     </div>
   </main>
 </div>
